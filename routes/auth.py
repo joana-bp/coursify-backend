@@ -8,11 +8,11 @@ import os, random, re
 
 from database import users_collection
 from models import (
-    RegisterRequest, VerifyRequest, LoginRequest,
+    RegisterRequest, LoginRequest,
     UpdateProfileRequest, ForgotPasswordRequest,
     ResetVerifyRequest, ResetPasswordRequest
 )
-from utils.mailer import send_verification_code, send_reset_code
+from utils.mailer import send_reset_code
 
 load_dotenv()
 
@@ -23,7 +23,6 @@ SECRET    = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
 
 # Temp in-memory stores
-pending_users = {}
 reset_codes   = {}
 
 
@@ -79,65 +78,86 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 async def register(data: RegisterRequest):
     validate_password(data.password)
 
+    # Check existing email
     if await users_collection.find_one({"email": data.email}):
         raise HTTPException(status_code=409, detail="Email already in use.")
+
+    # Check existing username
     if await users_collection.find_one({"username": data.username}):
         raise HTTPException(status_code=409, detail="Username already taken.")
 
-    code       = str(random.randint(100000, 999999))
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
-    hashed     = pwd.hash(data.password)
+    # Hash password
+    hashed_password = pwd.hash(data.password)
 
-    pending_users[data.email] = {
-        "code":            code,
-        "expires_at":      expires_at,
-        "username":        data.username,
-        "hashed_password": hashed,
+    # Create user immediately
+    new_user = {
+        "username": data.username,
+        "email": data.email,
+        "password": hashed_password,
+        "role": "user",
+        "gradeLevel": "",
+        "strand": "",
+        "isActive": True,
+        "createdAt": datetime.utcnow(),
     }
 
-    await send_verification_code(data.email, code)
-    return {"message": "Verification code sent to your email."}
+    result = await users_collection.insert_one(new_user)
+
+    new_user["_id"] = result.inserted_id
+
+    # Create JWT token
+    token = create_token({
+        "id": str(result.inserted_id),
+        "email": data.email,
+        "role": "user",
+    })
+
+    return {
+        "message": "Registration successful!",
+        "token": token,
+        "user": _serialize_user(new_user),
+    }
 
 
 # ── POST /api/auth/verify ─────────────────────────────────────────────────────
 
-@router.post("/verify")
-async def verify(data: VerifyRequest):
-    pending = pending_users.get(data.email)
+# @router.post("/verify")
+# async def verify(data: VerifyRequest):
+#     pending = pending_users.get(data.email)
 
-    if not pending:
-        raise HTTPException(status_code=400, detail="No registration found. Please sign up again.")
-    if datetime.utcnow() > pending["expires_at"]:
-        del pending_users[data.email]
-        raise HTTPException(status_code=400, detail="Code expired. Please sign up again.")
-    if pending["code"] != data.code:
-        raise HTTPException(status_code=400, detail="Incorrect code. Try again.")
+#     if not pending:
+#         raise HTTPException(status_code=400, detail="No registration found. Please sign up again.")
+#     if datetime.utcnow() > pending["expires_at"]:
+#         del pending_users[data.email]
+#         raise HTTPException(status_code=400, detail="Code expired. Please sign up again.")
+#     if pending["code"] != data.code:
+#         raise HTTPException(status_code=400, detail="Incorrect code. Try again.")
 
-    new_user = {
-        "username":   pending["username"],
-        "email":      data.email,
-        "password":   pending["hashed_password"],
-        "role":       "user",               # all self-registered accounts start as "user"
-        "gradeLevel": "",
-        "strand":     "",
-        "isActive":   True,
-        "createdAt":  datetime.utcnow(),
-    }
-    result = await users_collection.insert_one(new_user)
-    del pending_users[data.email]
+#     new_user = {
+#         "username":   pending["username"],
+#         "email":      data.email,
+#         "password":   pending["hashed_password"],
+#         "role":       "user",               # all self-registered accounts start as "user"
+#         "gradeLevel": "",
+#         "strand":     "",
+#         "isActive":   True,
+#         "createdAt":  datetime.utcnow(),
+#     }
+#     result = await users_collection.insert_one(new_user)
+#     del pending_users[data.email]
 
-    new_user["_id"] = result.inserted_id   # needed by _serialize_user
+#     new_user["_id"] = result.inserted_id   # needed by _serialize_user
 
-    token = create_token({
-        "id":    str(result.inserted_id),
-        "email": data.email,
-        "role":  "user",
-    })
-    return {
-        "message": "Registration successful!",
-        "token":   token,
-        "user":    _serialize_user(new_user),
-    }
+#     token = create_token({
+#         "id":    str(result.inserted_id),
+#         "email": data.email,
+#         "role":  "user",
+#     })
+#     return {
+#         "message": "Registration successful!",
+#         "token":   token,
+#         "user":    _serialize_user(new_user),
+#     }
 
 
 # ── POST /api/auth/login ──────────────────────────────────────────────────────
