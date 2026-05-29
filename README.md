@@ -1,20 +1,19 @@
 ## Coursify Backend
 ## Project Description
-Coursify Backend is the shared FastAPI server that powers both the Coursify Web and Coursify Mobile applications. It handles user authentication, psychometric assessment scoring, machine learning course recommendations, AI-generated profile summaries, and role-based admin operations.
+Coursify Backend is the shared FastAPI server that powers the Coursify Web. It handles user authentication, psychometric assessment scoring, machine learning course recommendations, AI-generated profile summaries, and role-based admin operations.
 It is built with Python and FastAPI, uses MongoDB Atlas as the database, and exposes a REST API consumed by both frontend platforms via JWT-authenticated requests.
 
 ## Features
-•	**User Authentication** — Registration with email OTP verification, login, JWT token issuance, forgot password with reset code, and password reset
 
 •	**Role-Based Access Control** — Three-tier role system (user, admin, superadmin) enforced via FastAPI middleware dependencies on all protected endpoints
 
-•	**Assessment Engine** — Randomized question delivery across RIASEC, Big Five, and Aptitude collections; server-side scoring with reverse-scoring support for Big Five
+•	**Assessment Engine** — Randomized question delivery across RIASEC, and Aptitude collections
 
-•	**ML Course Recommendations** — scikit-learn model accepts RIASEC raw scores, Big Five trait means, aptitude percentages, and strand to return top 5 ranked courses with confidence scores
+•	**ML Course Recommendations** — scikit-learn model accepts RIASEC raw scores, trait means, aptitude percentages, and strand to return top 5 ranked courses with confidence scores
 
 •	**AI Profile Summaries** — Google Gemini API generates personalized counselor-style summaries from scored assessment data
 
-•	**Assessment History** — Stores all completed assessment results per user; returns full score breakdowns including RIASEC, Big Five, aptitude, and recommendations
+•	**Assessment History** — Stores all completed assessment results per user; returns full score breakdowns including RIASEC, aptitude, and recommendations
 
 •	**Admin Analytics** — Aggregated user statistics, registration trends, strand/grade breakdowns, and role distribution with date range filtering
 
@@ -81,9 +80,9 @@ It is built with Python and FastAPI, uses MongoDB Atlas as the database, and exp
                     │               │                  │
                     │  ┌────────────▼─────────────┐   │
                     │  │     Role Middleware       │   │
-                    │  │  require_admin()          │   │
                     │  │  require_superadmin()     │   │
                     │  │  get_current_user()       │   │
+                    │  │                           │   │
                     │  └──────────────────────────┘   │
                     └───┬──────────────┬───────────┬───┘
                         │              │           │
@@ -91,26 +90,22 @@ It is built with Python and FastAPI, uses MongoDB Atlas as the database, and exp
            │ MongoDB Atlas │  │  scikit-learn │  │  Google Gemini AI  │
            │               │  │   ML Model    │  │                    │
            │  collections: │  │               │  │  Input: scored     │
-           │  users        │  │  Input:       │  │  RIASEC + BigFive  │
-           │  questions_   │  │  riasec_raw   │  │  + aptitude +      │
-           │    riasec     │  │  bigfive_raw  │  │  strand            │
+           │  users        │  │  Input:       │  │  RIASEC            │
+           │  questions_   │  │  riasec_raw   │  │  + aptitude        │
+           │    riasec     │  │               │  │              
            │  questions_   │  │  aptitude_pct │  │                    │
-           │    bigfive    │  │  strand       │  │  Output: 3–4 line  │
-           │  questions_   │  │               │  │  profile summary   │
+           │               │  │               │  │  Output: 3–4 line  │
+           │               │  │               │  │  profile summary   │
            │    aptitude   │  │  Output:      │  └───────────────────┘
            │  assessment_  │  │  top 5 courses│
            │    results    │  │  + confidence │
            └───────────────┘  └───────────────┘
-                                      │
-                             ┌────────▼────────┐
-                             │   Gmail SMTP     │
-                             │  OTP + Password  │
-                             │  Reset Emails    │
-                             └─────────────────┘
+                                      
+                          
 Assessment scoring flow:
-1.	Client submits strand, RIASEC answers, Big Five answers, and aptitude answers
+1.	Client submits strand, RIASEC answers, and aptitude answers
 2.	Backend fetches question documents from MongoDB to resolve subcategories and correct answers
-3.	RIASEC raw scores are summed per code; Big Five means are computed per trait with reverse scoring applied; aptitude correct counts are converted to percentages
+3.	RIASEC raw scores are summed per code; aptitude correct counts are converted to percentages
 4.	Scored data is passed to the scikit-learn ML model which returns top 5 ranked courses
 5.	Full result document is stored in assessment_results collection
 6.	Recommendations are returned to the client immediately
@@ -160,24 +155,37 @@ The API will be available at http://localhost:8000
 Interactive API docs are accessible at http://localhost:8000/docs
 
 ## Deployment Links
-https://coursify-fastapi-backend-1.onrender.com/
+http://coursify-backend-paum.onrender.com/
 
-## Team Members
-• Pailanan, Joana Mae B.
-• Lao, Dwight Ashley
 
 ## Known Limitations
-•	**Email delivery in deployment** — Gmail SMTP requires outbound ports 465 or 587, which most cloud hosting providers (including Render's free tier) block. This causes connection timeouts when sending OTP and password reset emails in production. Locally, email delivery works because the machine connects directly. The correct solution for production is to replace Gmail SMTP with a dedicated email API service such as SendGrid or Mailgun, which deliver email over HTTPS (port 443) instead
+•	**Registration OTP** — OTP verification and password reset emails are suspended due to the limitation that requires outbound ports 465 or 587 on render when deployed.
 
-•	**In-memory OTP storage** — Pending registrations and password reset codes are stored in Python dictionaries (pending_users, reset_codes) in memory. This means they are lost on server restart and will not work correctly if the backend is scaled to multiple instances. A production-ready solution would store these temporarily in MongoDB or Redis with a TTL index
+## Lab Activity
+**Lab Activity 2** extended the recommendation system by introducing advanced supervised learning techniques capable of improving prediction quality and deployment readiness.
+Among all evaluated models, **Random Forest** emerged as the optimal solution because it:
 
-•	**ML model is static** — The scikit-learn model is loaded once at startup from a local file. It does not retrain automatically as new assessment data accumulates
 
-•	**Admin and superadmin roles are web-only** — The mobile application supports the student role only. Admin and superadmin credentials will authenticate successfully via the API but the mobile app does not implement any admin UI or navigation
+-achieved high accuracy
 
-## Screenshots
-FastAPI 
-<img width="1920" height="1080" alt="Screenshot (15)" src="https://github.com/user-attachments/assets/7fdefe7b-cca4-449a-ad76-9b5093a1e63d" />
+
+-handled complex student data effectively
+
+
+-remained interpretable
+
+
+-produced stable predictions
+
+
+-supported efficient real-time deployment
+
+
+For these reasons, **Random Forest** became the final machine learning model integrated into the course recommendation system.
+
+
+
+
 
 
 
